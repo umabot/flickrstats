@@ -1,0 +1,10 @@
+# Environment variables
+.env
+
+# CSV files
+*.csv
+
+# Python virtual environment
+venv/
+__pycache__/
+*.pyc

@@ -1,0 +1,68 @@
+{
+    "photos": {
+        "page": 1,
+        "pages": 33,
+        "perpage": 3,
+        "total": 97,
+        "photo": [
+            {
+                "id": "51780993740",
+                "owner": "33951951@N00",
+                "secret": "6490a24b9c",
+                "server": "65535",
+                "farm": 66,
+                "title": "aguas calmas",
+                "ispublic": 1,
+                "isfriend": 0,
+                "isfamily": 0,
+                "stats": {
+                    "views": 82,
+                    "comments": 0,
+                    "favorites": 1,
+                    "total_views": 378,
+                    "total_comments": 0,
+                    "total_favorites": 4
+                }
+            },
+            {
+                "id": "52782271882",
+                "owner": "33951951@N00",
+                "secret": "6dc0bfd975",
+                "server": "65535",
+                "farm": 66,
+                "title": "catching the wind",
+                "ispublic": 1,
+                "isfriend": 0,
+                "isfamily": 0,
+                "stats": {
+                    "views": 22,
+                    "comments": 0,
+                    "favorites": 0,
+                    "total_views": 383,
+                    "total_comments": 0,
+                    "total_favorites": 7
+                }
+            },
+            {
+                "id": "51780360023",
+                "owner": "33951951@N00",
+                "secret": "589aa4182a",
+                "server": "65535",
+                "farm": 66,
+                "title": "calma",
+                "ispublic": 1,
+                "isfriend": 0,
+                "isfamily": 0,
+                "stats": {
+                    "views": 20,
+                    "comments": 0,
+                    "favorites": 0,
+                    "total_views": 47,
+                    "total_comments": 1,
+                    "total_favorites": 0
+                }
+            }
+        ]
+    },
+    "stat": "ok"
+}
