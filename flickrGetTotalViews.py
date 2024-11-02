@@ -7,8 +7,14 @@ import pprint
 import csv
 import os.path
 
-api_key = u'992c50d09d7a04d5877798a549aa6bc6'
-api_secret = u'0fb9aa30fc229463'
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Get API credentials from environment variables
+api_key = os.getenv('FLICKR_API_KEY')
+api_secret = os.getenv('FLICKR_API_SECRET')
 
 flickr = flickrapi.FlickrAPI(api_key, api_secret,format='parsed-json')
 # flickr = flickrapi.FlickrAPI(api_key, api_secret) not including format gives error TypeError: 'str' object cannot be interpreted as an integer
