@@ -1,3 +1,4 @@
+# DO NOT USE
 # this code to extract the daily stats from Flickr is WORKING
 # import needed libraries
 import flickrapi
