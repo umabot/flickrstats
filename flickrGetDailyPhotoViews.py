@@ -1,3 +1,27 @@
+"""
+Fetches daily popular photo statistics from Flickr for a user-defined date range.
+
+This script authenticates with the Flickr API, prompts the user for a start
+and end date (inclusive), and then retrieves data for popular photos for each
+day in that range. The data includes photo ID, title, views, favorites,
+secret, and server.
+
+Execution:
+    python flickrGetDailyPhotoViews.py
+
+Inputs:
+    - Start Date: Prompts the user to enter the start date in YYYY-MM-DD format.
+    - End Date: Prompts the user to enter the end date in YYYY-MM-DD format.
+      (If the same as the start date, data for a single day is fetched).
+
+Outputs:
+    - A CSV file named dynamically based on the input dates:
+        - flickr_stats_YYYY-MM-DD.csv (if start and end dates are the same)
+        - flickr_stats_YYYY-MM-DD_to_YYYY-MM-DD.csv (if dates differ)
+    - This CSV file contains columns: Date, Photo ID, Photo Title, Daily Views,
+      Daily Favorites, Secret, Server.
+    - Progress messages are printed to the console during execution.
+"""
 # this code to extract the daily stats from Flickr is WORKING
 
 import flickrapi
@@ -6,6 +30,7 @@ import json
 import csv
 import os.path
 from dotenv import load_dotenv
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
@@ -40,105 +65,127 @@ if not flickr.token_valid(perms='read'):
 
 # print('Step 2: use Flickr')
 
-# define an array with all the dates to use
-# datestouse = ['2023-05-17', '2023-05-18', '2023-05-19', '2023-05-20', '2023-05-21', '2023-05-22', '2023-05-23', '2023-05-24', '2023-05-25', '2023-05-26', '2023-05-27', '2023-05-28', '2023-05-29', '2023-05-30', '2023-05-31']
-# datestouse = ['2023-06-01','2023-06-02','2023-06-03','2023-06-04','2023-06-05','2023-06-06','2023-06-07','2023-06-08','2023-06-09','2023-06-10','2023-06-11','2023-06-12','2023-06-13','2023-06-14','2023-06-15','2023-06-16','2023-06-17','2023-06-18','2023-06-19','2023-06-20','2023-06-21','2023-06-22','2023-06-23','2023-06-24','2023-06-25','2023-06-26','2023-06-27','2023-06-28','2023-06-29','2023-06-30']
-# datestouse = ['2023-07-01','2023-07-02','2023-07-03','2023-07-04','2023-07-05','2023-07-06','2023-07-07','2023-07-08','2023-07-09','2023-07-10','2023-07-11','2023-07-12','2023-07-13','2023-07-14','2023-07-15','2023-07-16','2023-07-17','2023-07-18','2023-07-19','2023-07-20','2023-07-21','2023-07-22','2023-07-23','2023-07-24','2023-07-25','2023-07-26','2023-07-27','2023-07-28','2023-07-29','2023-07-30','2023-07-31']
-# datestouse = ['2023-08-01','2023-08-02','2023-08-03','2023-08-04','2023-08-05','2023-08-06','2023-08-07','2023-08-08','2023-08-09','2023-08-10','2023-08-11','2023-08-12','2023-08-13','2023-08-14','2023-08-15','2023-08-16','2023-08-17','2023-08-18','2023-08-19','2023-08-20','2023-08-21','2023-08-22','2023-08-23','2023-08-24','2023-08-25','2023-08-26','2023-08-27','2023-08-28','2023-08-29','2023-08-30','2023-08-31']
-# datestouse = ['2023-09-01','2023-09-02','2023-09-03','2023-09-04','2023-09-05','2023-09-06','2023-09-07','2023-09-08','2023-09-09','2023-09-10','2023-09-11','2023-09-12','2023-09-13','2023-09-14','2023-09-15','2023-09-16','2023-09-17','2023-09-18','2023-09-19','2023-09-20','2023-09-21','2023-09-22','2023-09-23','2023-09-24','2023-09-25','2023-09-26','2023-09-27','2023-09-28','2023-09-29','2023-09-30']
-# datestouse = ['2023-10-01','2023-10-02','2023-10-03','2023-10-04','2023-10-05','2023-10-06','2023-10-07','2023-10-08','2023-10-09','2023-10-10','2023-10-11','2023-10-12','2023-10-13','2023-10-14','2023-10-15','2023-10-16','2023-10-17','2023-10-18','2023-10-19','2023-10-20','2023-10-21','2023-10-22','2023-10-23','2023-10-24','2023-10-25','2023-10-26','2023-10-27','2023-10-28','2023-10-29','2023-10-30','2023-10-31']
-# datestouse = ['2023-11-01','2023-11-02','2023-11-03','2023-11-04','2023-11-05','2023-11-06','2023-11-07','2023-11-08','2023-11-09','2023-11-10','2023-11-11','2023-11-12','2023-11-13','2023-11-14','2023-11-15','2023-11-16','2023-11-17','2023-11-18','2023-11-19','2023-11-20','2023-11-21','2023-11-22','2023-11-23','2023-11-24','2023-11-25','2023-11-26','2023-11-27','2023-11-28','2023-11-29','2023-11-30']
-# datestouse = ['2023-12-01','2023-12-02','2023-12-03','2023-12-04','2023-12-05','2023-12-06','2023-12-07','2023-12-08','2023-12-09','2023-12-10','2023-12-11','2023-12-12','2023-12-13','2023-12-14','2023-12-15','2023-12-16','2023-12-17','2023-12-18','2023-12-19','2023-12-20','2023-12-21','2023-12-22','2023-12-23','2023-12-24','2023-12-25','2023-12-26','2023-12-27','2023-12-28','2023-12-29','2023-12-30']
-# datestouse = ['2024-01-01','2024-01-02','2024-01-03','2024-01-04','2024-01-05','2024-01-06','2024-01-07','2024-01-08','2024-01-09','2024-01-10','2024-01-11','2024-01-12','2024-01-13','2024-01-14','2024-01-15','2024-01-16','2024-01-17','2024-01-18','2024-01-19','2024-01-20','2024-01-21','2024-01-22','2024-01-23','2024-01-24','2024-01-25','2024-01-26','2024-01-27','2024-01-28','2024-01-29','2024-01-30','2024-01-31']
-# datestouse = ['2024-02-01','2024-02-02','2024-02-03','2024-02-04','2024-02-05','2024-02-06','2024-02-07','2024-02-08','2024-02-09','2024-02-10','2024-02-11','2024-02-12','2024-02-13','2024-02-14','2024-02-15','2024-02-16','2024-02-17','2024-02-18','2024-02-19','2024-02-20','2024-02-21','2024-02-22','2024-02-23','2024-02-24','2024-02-25','2024-02-26','2024-02-27','2024-02-28']
-# datestouse = ['2024-03-01','2024-03-02','2024-03-03','2024-03-04','2024-03-05','2024-03-06','2024-03-07','2024-03-08','2024-03-09','2024-03-10','2024-03-11','2024-03-12','2024-03-13','2024-03-14','2024-03-15','2024-03-16','2024-03-17','2024-03-18','2024-03-19','2024-03-20','2024-03-21','2024-03-22','2024-03-23','2024-03-24','2024-03-25','2024-03-26','2024-03-27','2024-03-28','2024-03-29','2024-03-30','2024-03-31']
-# datestouse = ['2024-04-01','2024-04-02','2024-04-03','2024-04-04','2024-04-05','2024-04-06','2024-04-07','2024-04-08','2024-04-09','2024-04-10','2024-04-11','2024-04-12','2024-04-13','2024-04-14','2024-04-15','2024-04-16','2024-04-17','2024-04-18','2024-04-19','2024-04-20','2024-04-21','2024-04-22','2024-04-23','2024-04-24','2024-04-25','2024-04-26','2024-04-27','2024-04-28','2024-04-29','2024-04-30']
-# datestouse = ['2024-05-01','2024-05-02','2024-05-03','2024-05-04','2024-05-05','2024-05-06','2024-05-07','2024-05-08','2024-05-09','2024-05-10','2024-05-11','2024-05-12','2024-05-13','2024-05-14','2024-05-15','2024-05-16','2024-05-17','2024-05-18','2024-05-19','2024-05-20','2024-05-21','2024-05-22','2024-05-23','2024-05-24','2024-05-25','2024-05-26','2024-05-27','2024-05-28','2024-05-29','2024-05-30','2024-05-31']
-# datestouse = ['2024-06-01','2024-06-02','2024-06-03','2024-06-04','2024-06-05','2024-06-06','2024-06-07','2024-06-08','2024-06-09','2024-06-10','2024-06-11','2024-06-12','2024-06-13','2024-06-14','2024-06-15','2024-06-16','2024-06-17','2024-06-18','2024-06-19','2024-06-20','2024-06-21','2024-06-22','2024-06-23','2024-06-24','2024-06-25','2024-06-26','2024-06-27','2024-06-28','2024-06-29','2024-06-30']
-# datestouse = ['2024-07-01','2024-07-02','2024-07-03','2024-07-04','2024-07-05','2024-07-06','2024-07-07','2024-07-08','2024-07-09','2024-07-10','2024-07-11','2024-07-12','2024-07-13','2024-07-14','2024-07-15','2024-07-16','2024-07-17','2024-07-18','2024-07-19','2024-07-20','2024-07-21','2024-07-22','2024-07-23','2024-07-24','2024-07-25','2024-07-26','2024-07-27','2024-07-28','2024-07-29','2024-07-30','2024-07-31']
-# datestouse = ['2024-08-01','2024-08-02','2024-08-03','2024-08-04','2024-08-05','2024-08-06','2024-08-07','2024-08-08','2024-08-09','2024-08-10','2024-08-11','2024-08-12','2024-08-13','2024-08-14','2024-08-15','2024-08-16','2024-08-17','2024-08-18','2024-08-19','2024-08-20','2024-08-21','2024-08-22','2024-08-23','2024-08-24','2024-08-25','2024-08-26','2024-08-27','2024-08-28','2024-08-29','2024-08-30','2024-08-31']
-# datestouse = ['2024-09-01','2024-09-02','2024-09-03','2024-09-04','2024-09-05','2024-09-06','2024-09-07','2024-09-08','2024-09-09','2024-09-10','2024-09-11','2024-09-12','2024-09-13','2024-09-14','2024-09-15','2024-09-16','2024-09-17','2024-09-18','2024-09-19','2024-09-20','2024-09-21','2024-09-22','2024-09-23','2024-09-24','2024-09-25','2024-09-26','2024-09-27','2024-09-28','2024-09-29','2024-09-30']
-# datestouse = ['2024-10-01','2024-10-02','2024-10-03','2024-10-04','2024-10-05','2024-10-06','2024-10-07','2024-10-08','2024-10-09','2024-10-10','2024-10-11','2024-10-12','2024-10-13','2024-10-14','2024-10-15','2024-10-16','2024-10-17','2024-10-18','2024-10-19','2024-10-20','2024-10-21','2024-10-22','2024-10-23','2024-10-24','2024-10-25','2024-10-26','2024-10-27','2024-10-28','2024-10-29','2024-10-30','2024-10-31']
+# Function to validate date format
+def validate_date(date_string: str) -> bool:
+    """
+    Validates if the given string is a date in 'YYYY-MM-DD' format.
 
-datestouse = ['2024-10-13']
+    Args:
+        date_string: The string to validate.
 
-datestouse = ['2024-11-01','2024-11-02','2024-11-03','2024-11-04','2024-11-05','2024-11-06','2024-11-07','2024-11-08','2024-11-09','2024-11-10','2024-11-11','2024-11-12','2024-11-13','2024-11-14','2024-11-15','2024-11-16','2024-11-17','2024-11-18','2024-11-19','2024-11-20','2024-11-21','2024-11-22','2024-11-23','2024-11-24','2024-11-25','2024-11-26','2024-11-27','2024-11-28','2024-11-29','2024-11-30']
+    Returns:
+        True if the string matches the format, False otherwise.
+    """
+    try:
+        datetime.strptime(date_string, '%Y-%m-%d')
+        return True
+    except ValueError:
+        return False
 
-# Define the parameters for the API method call
-# and set the start date
+while True:
+    start_date_str = input("Enter the start date (YYYY-MM-DD): ")
+    if not validate_date(start_date_str):
+        print("Invalid start date format. Please use YYYY-MM-DD.")
+        continue
 
+    end_date_str = input("Enter the end date (YYYY-MM-DD): ")
+    if not validate_date(end_date_str):
+        print("Invalid end date format. Please use YYYY-MM-DD.")
+        continue
+    
+    # Further validation can be added here, e.g., end_date >= start_date
+    # For now, just confirming the input
+    print(f"Start Date: {start_date_str}")
+    print(f"End Date: {end_date_str}")
+    break
+
+from datetime import timedelta
+
+# The following processing loop will be adapted in the next step.
+# For now, we are just confirming date input.
+
+# Generate the list of dates to process based on user input
+datestouse = []
+start_date_dt = datetime.strptime(start_date_str, '%Y-%m-%d') # Convert string to datetime object
+end_date_dt = datetime.strptime(end_date_str, '%Y-%m-%d')   # Convert string to datetime object
+
+current_date_dt = start_date_dt
+# Loop from start date to end date (inclusive)
+while current_date_dt <= end_date_dt:
+    datestouse.append(current_date_dt.strftime('%Y-%m-%d')) # Add formatted date string to list
+    current_date_dt += timedelta(days=1) # Increment current date by one day
+
+print("Generated list of dates to process:")
+print(datestouse)
+
+# Determine CSV filename based on whether the start and end dates are the same
+if start_date_str == end_date_str:
+    filepath = f"flickr_stats_{start_date_str}.csv"
+else:
+    filepath = f"flickr_stats_{start_date_str}_to_{end_date_str}.csv"
+print(f"Output CSV file will be: {filepath}")
+
+# Check if the CSV file already exists. This is used to decide whether to write the header row.
+# The header should only be written if the file is being created for the first time during this script run.
+file_exists_for_header = os.path.exists(filepath)
+
+# Main loop: Iterate through each date in the generated 'datestouse' list
 for todaydate in datestouse:
-
+    print(f"Processing data for: {todaydate}")
+    
+    # Parameters for the Flickr API call for the current date
     params = {
         'date': todaydate,
-        'per_page': 100,
-        'page': 1
+        'per_page': 100,  # Flickr API default, max is 500, but 100 is common
+        'page': 1         # Start with page 1
     }
 
-    # Call the API method
-    response = flickr.stats.getPopularPhotos(**params)
-    total_photos = {response['photos']['total']}
-    # print(type(total_photos))
-    total_pages = {response['photos']['pages']}
-    # print(total_pages)
-    # json_str = json.dumps(response, indent=4)
-    # print(json_str)
+    # Initial API call for the current date to determine total pages and photos
+    try:
+        response_initial = flickr.stats.getPopularPhotos(**params)
+        # Extract total number of photos and pages from the initial response
+        total_photos_for_date = response_initial['photos']['total']
+        total_pages_for_date = response_initial['photos']['pages']
+        print(f"Date: {todaydate} - Total pages: {total_pages_for_date}, Total photos: {total_photos_for_date}")
 
-    # Process the response as needed
-    # print(type(response))
-    print(f"Total pages: {total_pages}")
-    print(f"Total photos: {total_photos}")
+        # Open the CSV file in append mode ('a').
+        # This creates the file if it doesn't exist, or appends to it if it does.
+        # 'newline=''' prevents blank rows from being written in the CSV on Windows.
+        with open(filepath, mode='a', newline='') as csv_file:
+            writer = csv.writer(csv_file)
+            
+            # Write the header row only if the file did not exist before this script started processing.
+            if not file_exists_for_header:
+                strheader = 'Date' + '\t' + 'Photo ID' + '\t' + 'Photo Title' + '\t' + 'Daily Views' + '\t' + 'Daily Favorites' + '\t' + 'Secret' + '\t'+ 'Server' + '\n'
+                csv_file.write(strheader)
+                file_exists_for_header = True # Set flag to True so header isn't written again for subsequent dates
 
-    # print(response)
-    # print(params)
+            # Pagination loop: Iterate through all pages of results for the current date
+            page_number = 1
+            while page_number <= total_pages_for_date:
+                params['page'] = page_number # Update the page number for the next API call
+                response_page = flickr.stats.getPopularPhotos(**params) # Fetch the current page of results
+                
+                # Extract data for each photo on the current page
+                for photo in response_page['photos']['photo']:
+                    idphoto = photo['id']
+                    title = photo['title']
+                    server = photo['server'] # Needed to construct photo URLs if desired
+                    secret = photo['secret'] # Needed to construct photo URLs if desired
+                    views = photo['stats']['views']
+                    favorites = photo['stats']['favorites']
+                    # Prepare data row as a tab-separated string
+                    strline = f'{todaydate}\t{idphoto}\t{title}\t{views}\t{favorites}\t{secret}\t{server}'
+                    csv_file.write(strline + '\n') # Write the row to the CSV
+                
+                page_number += 1 # Move to the next page
+        print(f"Data for {todaydate} written to {filepath}")
 
-    # Path to CSV file
-    # filepath = 'my_flickr_daily_stats_allpages_secretserver.csv'
-    filepath = 'my_flickr_2024-11-01_stats_allpages.csv'
+    except flickrapi.exceptions.FlickrError as e:
+        # Handle specific Flickr API errors (e.g., rate limits, invalid parameters)
+        print(f"Flickr API Error for date {todaydate}: {e}")
+    except Exception as e:
+        # Handle any other unexpected errors during processing for a specific date
+        print(f"An unexpected error occurred for date {todaydate}: {e}")
 
-    # Check if file exists
-    file_exists = os.path.exists(filepath)
-
-    # Open the file in append mode
-    # If file does not exist, create it
-    # If file exists, append to it
-    with open(filepath, mode='a', newline='') as csv_file:
-        writer = csv.writer(csv_file)
-        if not file_exists:
-            # Write the header row when creating a new file
-            strheader = 'Date' + '\t' + 'Photo ID' + '\t' + 'Photo Title' + '\t' + 'Daily Views' + '\t' + 'Daily Favorites' + '\t' + 'Secret' + '\t'+ 'Server' + '\n'
-            csv_file.write(strheader) 
-        # iterates for each page
-        # Parameters
-        per_page = 100  # Number of photos to return per page
-        page_number = 1  # Initial page number
-        total_pages = 1  # Total number of pages (initialize to 1)
-
-        # Make calls and retrieve all pages
-        while page_number <= total_pages:
-            # Call the flickr.stats.getPopularPhotos method
-            response = flickr.stats.getPopularPhotos(date=todaydate, per_page=per_page, page=page_number)
-            # Write the data rows
-            for photo in response['photos']['photo']:
-                idphoto = photo['id']
-                title = photo['title']
-                server = photo['server']
-                secret = photo['secret']
-                views = photo['stats']['views']
-                favorites = photo['stats']['favorites']
-                # strline = todaydate + "," + idphoto + "," +  title + "," +  str(views) + "," +  str(favorites)
-                # print(f'ID: {idphoto} - Title: {title} - Views: {views} - Favorites: {favorites}')
-                strline = f'{todaydate}\t{idphoto}\t{title}\t{views}\t{favorites}\t{secret}\t{server}'
-                csv_file.write(strline + '\n')
-            # Update the total_pages based on the response
-            total_pages = response['photos']['pages']
-            # Move to the next page
-            page_number += 1
-
-    # Print confirmation message
-    if file_exists:
-        print(f"Data appended to {filepath}!")
-    else:
-        print(f"New file created: {filepath}!")
-
-    csv_file.close()
+print(f"All processing complete. Data saved to {filepath}")
