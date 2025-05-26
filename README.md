@@ -1,19 +1,90 @@
-# Activate the virtual environment
-source ~/development/venvs/flickrscrap/bin/activate
+# Flickr Photo Stats Scripts
 
-# Run your script
-python flickrGetDailyPhotoViews.py
+This repository contains Python scripts to interact with the Flickr API and retrieve photo statistics.
 
-The script will connect to my Flickr account and download for each day in the variable `datestouse` the views and favorites for each photo in that day.
+## Flickr Daily Photo Stats (`flickrGetDailyPhotoViews.py`)
 
-All the stats are added to the file `my_flickr_daily_stats_allpages_secretserver.csv`
+**Purpose:**
+This script fetches daily popular photo statistics (views, favorites, photo ID, title, secret, and server) from your Flickr account for a user-specified date range. The collected data is then saved into a CSV file.
 
-A full set of data is saved in my Google Drive, personal account, file `Flickr Stats v2`
+**Prerequisites:**
+*   Python 3.x
+*   pip (Python package installer)
 
-Files ignored in the push to the remote repo:
-- .env file with the key and secret to connect to my Flickr account via API
-- *.csv files with my stats from my photos
-- python code and venv
+**Setup & Installation:**
+1.  **Clone the repository:**
+    ```bash
+    git clone <repository_url> 
+    cd <repository_directory>
+    ```
+    (Replace `<repository_url>` and `<repository_directory>` with the actual URL and local directory name).
 
-# Documentation in my Obsidian
-Find the Obsidian note called `Flickr Photo Project - my stats`
+2.  **Navigate to the repository directory** (if not already there).
+
+3.  **Create and activate a virtual environment (recommended):**
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate 
+    ```
+    (On Windows, use `venv\Scripts\activate`)
+
+4.  **Install dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+5.  **API Credentials:**
+    This script requires Flickr API credentials to access your account.
+    *   Create a file named `.env` in the root directory of the project.
+    *   Add your Flickr API key and secret to the `.env` file as follows:
+        ```env
+        FLICKR_API_KEY='YOUR_FLICKR_API_KEY'
+        FLICKR_API_SECRET='YOUR_FLICKR_API_SECRET'
+        ```
+    *   **Important:** Replace `YOUR_FLICKR_API_KEY` and `YOUR_FLICKR_API_SECRET` with your actual Flickr API key and secret.
+    *   The `.env` file is included in `.gitignore` to prevent accidental committing of your sensitive credentials.
+
+**How to Run:**
+1.  Ensure your virtual environment is activated if you are using one.
+2.  Execute the script from the root directory of the project using:
+    ```bash
+    python3 flickrGetDailyPhotoViews.py
+    ```
+3.  The script will then prompt you to enter the date range:
+    *   `Enter start date (YYYY-MM-DD):`
+    *   `Enter end date (YYYY-MM-DD):` (Enter the same date as the start date if you want data for a single day).
+
+4.  **Authentication:**
+    *   If this is your first time running the script, or if your previous authentication token is invalid or has expired, the script will guide you through an OAuth authentication process:
+        1.  It will print a URL to the console.
+        2.  Copy and paste this URL into your web browser.
+        3.  Authorize the application in Flickr.
+        4.  Flickr will provide a verifier code.
+        5.  Copy this verifier code and paste it back into the script when prompted: `Verifier code:`
+    *   Once authenticated, the script will store the token for future sessions, so you won't need to repeat this process every time unless the token becomes invalid.
+
+**Output:**
+*   The script generates a CSV file containing the fetched statistics.
+*   The filename is dynamically created based on the input dates:
+    *   If the start and end dates are the same: `flickr_stats_YYYY-MM-DD.csv`
+    *   If the start and end dates are different: `flickr_stats_YYYY-MM-DD_to_YYYY-MM-DD.csv`
+*   **Columns in the CSV file:**
+    *   `Date`: The date for which the stats were fetched (YYYY-MM-DD).
+    *   `Photo ID`: The unique identifier for the photo.
+    *   `Photo Title`: The title of the photo.
+    *   `Daily Views`: The number of views the photo received on that date.
+    *   `Daily Favorites`: The number of favorites the photo received on that date.
+    *   `Secret`: The photo's secret, needed for constructing URLs.
+    *   `Server`: The server ID for the photo, needed for constructing URLs.
+
+## Author & Project Notes
+
+**Data Backup & Personal Documentation (Author-Specific):**
+*   The author periodically saves a full set of generated data to Google Drive (personal account, file `Flickr Stats v2`).
+*   Additional project documentation and notes by the author may be found in their Obsidian vault (note titled `Flickr Photo Project - my stats`).
+
+**Repository Notes:**
+*   The `.gitignore` file is configured to exclude:
+    *   The `.env` file (containing sensitive API credentials), as detailed in the script setup.
+    *   `*.csv` data files (generated by the script).
+    *   Standard Python virtual environment directories (e.g., `venv/`) and cache files (e.g., `__pycache__/`).
