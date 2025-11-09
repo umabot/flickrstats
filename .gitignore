@@ -1,10 +1,40 @@
 # Environment variables
 .env
 
-# CSV files
+# CSV output files
 *.csv
 
-# Python virtual environment
+# Python
 venv/
+env/
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+.Spotlight-V100
+.Trashes
+
+# Project specific
+examples/*.csv
+examples/*.bak
