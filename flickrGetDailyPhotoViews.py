@@ -22,48 +22,21 @@ Outputs:
       Daily Favorites, Secret, Server.
     - Progress messages are printed to the console during execution.
 """
-# this code to extract the daily stats from Flickr is WORKING
 
 import flickrapi
-import webbrowser
-import json
 import csv
-import os.path
-from dotenv import load_dotenv
-from datetime import datetime
+import os
+import time
+from datetime import datetime, timedelta
+from flickr_auth import get_authenticated_client
 
-# Load environment variables
-load_dotenv()
+# Constants for API retry logic
+MAX_RETRIES = 3
+INITIAL_RETRY_DELAY = 2  # seconds
+MAX_RETRY_DELAY = 60  # seconds
 
-# Get API credentials from environment variables
-api_key = os.getenv('FLICKR_API_KEY')
-api_secret = os.getenv('FLICKR_API_SECRET')
-
-flickr = flickrapi.FlickrAPI(api_key, api_secret,format='parsed-json')
-# flickr = flickrapi.FlickrAPI(api_key, api_secret) not including format gives error TypeError: 'str' object cannot be interpreted as an integer
-# the response is in xml format and we need another way to parse the data
-
-print('Step 1: authenticate')
-
-# Only do this if we don't have a valid token already
-if not flickr.token_valid(perms='read'):
-
-    # Get a request token
-    flickr.get_request_token(oauth_callback='oob')
-
-    # Open a browser at the authentication URL. Do this however
-    # you want, as long as the user visits that URL.
-    authorize_url = flickr.auth_url(perms='read')
-    webbrowser.open_new_tab(authorize_url)
-
-    # Get the verifier code from the user. Do this however you
-    # want, as long as the user gives the application the code.
-    verifier = str(input('Verifier code: '))
-
-    # Trade the request token for an access token
-    flickr.get_access_token(verifier)
-
-# print('Step 2: use Flickr')
+# Get authenticated Flickr client
+flickr = get_authenticated_client()
 
 # Function to validate date format
 def validate_date(date_string: str) -> bool:
@@ -82,6 +55,57 @@ def validate_date(date_string: str) -> bool:
     except ValueError:
         return False
 
+
+def make_api_call_with_retry(flickr, method_name: str, **params):
+    """
+    Make Flickr API call with exponential backoff retry logic.
+
+    Args:
+        flickr: FlickrAPI instance
+        method_name: API method (e.g., 'stats.getPopularPhotos')
+        **params: API parameters
+
+    Returns:
+        API response dict or None if all retries failed
+    """
+    retry_delay = INITIAL_RETRY_DELAY
+
+    for attempt in range(MAX_RETRIES):
+        try:
+            # Get the method from flickr object dynamically
+            method_parts = method_name.split('.')
+            method = flickr
+            for part in method_parts:
+                method = getattr(method, part)
+
+            return method(**params)
+
+        except flickrapi.exceptions.FlickrError as e:
+            error_code = getattr(e, 'code', None)
+
+            # Check if it's a rate limit error
+            if error_code in [105, 'Rate Limit Exceeded']:
+                if attempt < MAX_RETRIES - 1:
+                    print(f"Rate limit hit. Retrying in {retry_delay} seconds... "
+                          f"(Attempt {attempt + 1}/{MAX_RETRIES})")
+                    time.sleep(retry_delay)
+                    retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY)
+                    continue
+
+            # For other Flickr errors, raise immediately
+            raise
+
+        except Exception as e:
+            if attempt < MAX_RETRIES - 1:
+                print(f"Error occurred: {e}. Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY)
+                continue
+            raise
+
+    return None
+
+
 while True:
     start_date_str = input("Enter the start date (YYYY-MM-DD): ")
     if not validate_date(start_date_str):
@@ -92,28 +116,33 @@ while True:
     if not validate_date(end_date_str):
         print("Invalid end date format. Please use YYYY-MM-DD.")
         continue
-    
-    # Further validation can be added here, e.g., end_date >= start_date
-    # For now, just confirming the input
+
+    # Validate that end_date is not before start_date
+    start_date_dt = datetime.strptime(start_date_str, '%Y-%m-%d')
+    end_date_dt = datetime.strptime(end_date_str, '%Y-%m-%d')
+
+    if end_date_dt < start_date_dt:
+        print("Error: End date cannot be before start date. Please try again.")
+        continue
+
+    # Warn about future dates
+    today = datetime.now().date()
+    if start_date_dt.date() > today or end_date_dt.date() > today:
+        print(f"Warning: You've entered future dates. Data may not be available yet.")
+        confirm = input("Continue anyway? (y/n): ")
+        if confirm.lower() != 'y':
+            continue
+
     print(f"Start Date: {start_date_str}")
     print(f"End Date: {end_date_str}")
     break
 
-from datetime import timedelta
-
-# The following processing loop will be adapted in the next step.
-# For now, we are just confirming date input.
-
 # Generate the list of dates to process based on user input
 datestouse = []
-start_date_dt = datetime.strptime(start_date_str, '%Y-%m-%d') # Convert string to datetime object
-end_date_dt = datetime.strptime(end_date_str, '%Y-%m-%d')   # Convert string to datetime object
-
 current_date_dt = start_date_dt
-# Loop from start date to end date (inclusive)
 while current_date_dt <= end_date_dt:
-    datestouse.append(current_date_dt.strftime('%Y-%m-%d')) # Add formatted date string to list
-    current_date_dt += timedelta(days=1) # Increment current date by one day
+    datestouse.append(current_date_dt.strftime('%Y-%m-%d'))
+    current_date_dt += timedelta(days=1)
 
 print("Generated list of dates to process:")
 print(datestouse)
@@ -125,67 +154,60 @@ else:
     filepath = f"flickr_stats_{start_date_str}_to_{end_date_str}.csv"
 print(f"Output CSV file will be: {filepath}")
 
-# Check if the CSV file already exists. This is used to decide whether to write the header row.
-# The header should only be written if the file is being created for the first time during this script run.
 file_exists_for_header = os.path.exists(filepath)
 
-# Main loop: Iterate through each date in the generated 'datestouse' list
 for todaydate in datestouse:
     print(f"Processing data for: {todaydate}")
-    
-    # Parameters for the Flickr API call for the current date
+
     params = {
         'date': todaydate,
-        'per_page': 100,  # Flickr API default, max is 500, but 100 is common
-        'page': 1         # Start with page 1
+        'per_page': 100,
+        'page': 1
     }
 
     # Initial API call for the current date to determine total pages and photos
     try:
-        response_initial = flickr.stats.getPopularPhotos(**params)
-        # Extract total number of photos and pages from the initial response
+        response_initial = make_api_call_with_retry(flickr, 'stats.getPopularPhotos', **params)
+        if not response_initial:
+            print(f"Failed to fetch data for {todaydate} after {MAX_RETRIES} retries. Skipping this date.")
+            continue
+
         total_photos_for_date = response_initial['photos']['total']
         total_pages_for_date = response_initial['photos']['pages']
         print(f"Date: {todaydate} - Total pages: {total_pages_for_date}, Total photos: {total_photos_for_date}")
 
-        # Open the CSV file in append mode ('a').
-        # This creates the file if it doesn't exist, or appends to it if it does.
-        # 'newline=''' prevents blank rows from being written in the CSV on Windows.
         with open(filepath, mode='a', newline='') as csv_file:
-            writer = csv.writer(csv_file)
-            
-            # Write the header row only if the file did not exist before this script started processing.
-            if not file_exists_for_header:
-                strheader = 'Date' + '\t' + 'Photo ID' + '\t' + 'Photo Title' + '\t' + 'Daily Views' + '\t' + 'Daily Favorites' + '\t' + 'Secret' + '\t'+ 'Server' + '\n'
-                csv_file.write(strheader)
-                file_exists_for_header = True # Set flag to True so header isn't written again for subsequent dates
+            writer = csv.writer(csv_file, delimiter='\t')
 
-            # Pagination loop: Iterate through all pages of results for the current date
+            if not file_exists_for_header:
+                writer.writerow(['Date', 'Photo ID', 'Photo Title', 'Daily Views',
+                                'Daily Favorites', 'Secret', 'Server'])
+                file_exists_for_header = True
+
             page_number = 1
             while page_number <= total_pages_for_date:
-                params['page'] = page_number # Update the page number for the next API call
-                response_page = flickr.stats.getPopularPhotos(**params) # Fetch the current page of results
-                
-                # Extract data for each photo on the current page
+                params['page'] = page_number
+                response_page = make_api_call_with_retry(flickr, 'stats.getPopularPhotos', **params)
+
+                if not response_page:
+                    print(f"Failed to fetch page {page_number} for {todaydate}. Skipping remaining pages.")
+                    break
+
                 for photo in response_page['photos']['photo']:
                     idphoto = photo['id']
                     title = photo['title']
-                    server = photo['server'] # Needed to construct photo URLs if desired
-                    secret = photo['secret'] # Needed to construct photo URLs if desired
+                    server = photo['server']
+                    secret = photo['secret']
                     views = photo['stats']['views']
                     favorites = photo['stats']['favorites']
-                    # Prepare data row as a tab-separated string
-                    strline = f'{todaydate}\t{idphoto}\t{title}\t{views}\t{favorites}\t{secret}\t{server}'
-                    csv_file.write(strline + '\n') # Write the row to the CSV
-                
-                page_number += 1 # Move to the next page
+                    writer.writerow([todaydate, idphoto, title, views, favorites, secret, server])
+
+                page_number += 1
         print(f"Data for {todaydate} written to {filepath}")
 
     except flickrapi.exceptions.FlickrError as e:
-        # Handle specific Flickr API errors (e.g., rate limits, invalid parameters)
         print(f"Flickr API Error for date {todaydate}: {e}")
     except Exception as e:
-        # Handle any other unexpected errors during processing for a specific date
         print(f"An unexpected error occurred for date {todaydate}: {e}")
 
 print(f"All processing complete. Data saved to {filepath}")
