@@ -1,90 +1,102 @@
-"""Flickr API authentication utilities.
+"""
+Handles Flickr API authentication.
 
 This module provides functions to authenticate with the Flickr API using OAuth.
-It handles credential loading from environment variables and manages the
-authentication flow.
+It securely loads credentials from environment variables and manages the
+authentication flow, including token validation and user authorization.
 """
 
 import os
 import webbrowser
-import flickrapi
-from dotenv import load_dotenv
 from typing import Tuple
 
+import flickrapi
+from dotenv import load_dotenv
 
-def load_credentials() -> Tuple[str, str]:
+import ui
+
+
+def _load_credentials() -> Tuple[str, str]:
     """
-    Load and validate Flickr API credentials from environment variables.
+    Loads Flickr API key and secret from environment variables.
+
+    This function uses python-dotenv to load variables from a .env file.
 
     Returns:
-        Tuple of (api_key, api_secret)
+        A tuple containing the API key and secret.
 
     Raises:
-        ValueError: If credentials are missing from environment
+        ValueError: If either the API key or secret is not found.
     """
     load_dotenv()
 
-    api_key = os.getenv('FLICKR_API_KEY')
-    api_secret = os.getenv('FLICKR_API_SECRET')
+    api_key = os.getenv("FLICKR_API_KEY")
+    api_secret = os.getenv("FLICKR_API_SECRET")
 
     if not api_key or not api_secret:
         raise ValueError(
-            "Missing Flickr API credentials. Please ensure FLICKR_API_KEY and "
-            "FLICKR_API_SECRET are set in your .env file. See README for setup instructions."
+            "Missing Flickr API credentials. Ensure FLICKR_API_KEY and "
+            "FLICKR_API_SECRET are set in your .env file."
         )
 
     return api_key, api_secret
 
 
-def authenticate_flickr(api_key: str, api_secret: str) -> flickrapi.FlickrAPI:
+def _perform_oauth(flickr: flickrapi.FlickrAPI) -> flickrapi.FlickrAPI:
     """
-    Authenticate with Flickr API using OAuth.
-
-    If a valid token already exists, it will be reused. Otherwise, opens a browser
-    for the user to authorize the application and provide a verifier code.
+    Guides the user through the OAuth authentication process.
 
     Args:
-        api_key: Flickr API key
-        api_secret: Flickr API secret
+        flickr: A FlickrAPI instance.
 
     Returns:
-        Authenticated FlickrAPI instance with parsed-json format
+        The authenticated FlickrAPI instance.
     """
-    flickr = flickrapi.FlickrAPI(api_key, api_secret, format='parsed-json')
+    ui.print_progress("First-time setup: You need to authorize this app with Flickr.")
 
-    # Only authenticate if we don't have a valid token already
-    if not flickr.token_valid(perms='read'):
-        print('Step 1: authenticate')
-
+    try:
         # Get a request token
-        flickr.get_request_token(oauth_callback='oob')
+        flickr.get_request_token(oauth_callback="oob")
 
-        # Open a browser at the authentication URL
-        authorize_url = flickr.auth_url(perms='read')
-        print('Opening browser for authorization...')
+        # Open a browser for the user to authorize
+        authorize_url = flickr.auth_url(perms="read")
+        ui.print_progress(f"A browser window will now open to this URL: {authorize_url}")
         webbrowser.open_new_tab(authorize_url)
 
         # Get the verifier code from the user
-        verifier = input('Verifier code: ').strip()
+        verifier = input("Please enter the verifier code from Flickr: ").strip()
 
         # Trade the request token for an access token
         flickr.get_access_token(verifier)
-        print('Authentication successful!')
+        ui.print_success("Authentication successful! Your token is now cached.")
+
+    except Exception as e:
+        ui.print_error(f"An error occurred during authentication: {e}")
+        raise
 
     return flickr
 
 
 def get_authenticated_client() -> flickrapi.FlickrAPI:
     """
-    Get an authenticated Flickr API client.
+    Provides an authenticated Flickr API client.
 
-    This is a convenience function that combines credential loading and authentication.
+    This function loads credentials, initializes the FlickrAPI client, and
+    checks for a valid cached token. If no valid token is found, it
+    initiates the OAuth process.
 
     Returns:
-        Authenticated FlickrAPI instance
+        An authenticated FlickrAPI instance.
 
     Raises:
-        ValueError: If credentials are missing from environment
+        ValueError: If API credentials are not configured correctly.
     """
-    api_key, api_secret = load_credentials()
-    return authenticate_flickr(api_key, api_secret)
+    api_key, api_secret = _load_credentials()
+    flickr = flickrapi.FlickrAPI(api_key, api_secret, format="parsed-json")
+
+    # If the token is not valid, initiate the authentication process
+    if not flickr.token_valid(perms="read"):
+        flickr = _perform_oauth(flickr)
+
+    ui.print_progress("Flickr client authenticated.")
+    return flickr
