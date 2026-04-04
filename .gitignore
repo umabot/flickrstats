@@ -38,3 +38,5 @@ Thumbs.db
 # Project specific
 examples/*.csv
 examples/*.bak
+output/*.csv
+output/*.bak
