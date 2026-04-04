@@ -43,5 +43,15 @@
     "mode": "NULLABLE",
     "name": "thumbnail",
     "type": "STRING"
+  },
+  {
+    "mode": "NULLABLE",
+    "name": "loaded_at",
+    "type": "TIMESTAMP"
+  },
+  {
+    "mode": "NULLABLE",
+    "name": "updated_at",
+    "type": "TIMESTAMP"
   }
 ]

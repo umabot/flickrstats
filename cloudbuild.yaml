@@ -21,13 +21,13 @@ steps:
       - functions
       - deploy
       - flickr-daily-extract
-      - --region=us-central1
+      - --region=europe-west9
       - --runtime=python311
       - --trigger-http
       - --entry-point=main_handler
       - --timeout=540s
       - --memory=256MB
-      - --service-account=flickr-extractor@flickrstats-492309.iam.gserviceaccount.com
+      - --service-account=flickr-stats-loader@flickrstats-492309.iam.gserviceaccount.com
       - --no-allow-unauthenticated
       - >-
         --set-secrets=FLICKR_API_KEY=flickr-api-key:latest,FLICKR_API_SECRET=flickr-api-secret:latest,FLICKR_OAUTH_TOKEN=flickr-oauth-token:latest,FLICKR_OAUTH_TOKEN_SECRET=flickr-oauth-token-secret:latest

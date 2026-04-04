@@ -12,8 +12,9 @@ by Cloud Scheduler) and performs the following steps:
    (flickrstats-492309.flickrstats.stage_daily_extract).
 6. Executes a MERGE statement to upsert the staged rows into the main table
    (flickrstats-492309.flickrstats.flickrstats_all):
-   - MATCHED on (Date, Photo ID) → updates Daily Views and Daily Favorites.
-   - NOT MATCHED → inserts the entire row.
+   - MATCHED on (Date, Photo ID) → updates Daily Views, Daily Favorites,
+     and updated_at.
+   - NOT MATCHED → inserts the full row and sets loaded_at/updated_at.
 7. Truncates the staging table to prepare it for the next run.
 
 Environment variables required (recommended via Cloud Secret Manager):
@@ -219,8 +220,8 @@ def run_merge(bq_client: bigquery.Client) -> None:
     """Upsert staged rows into the main table using a BigQuery MERGE.
 
     Composite PK: Date + Photo ID
-    - MATCHED     → update Daily Views and Daily Favorites.
-    - NOT MATCHED → insert the full row.
+    - MATCHED     → update Daily Views, Daily Favorites, and updated_at.
+    - NOT MATCHED → insert the full row and set loaded_at/updated_at.
 
     Args:
         bq_client: Authenticated BigQuery client.
@@ -232,9 +233,17 @@ def run_merge(bq_client: bigquery.Client) -> None:
     WHEN MATCHED THEN
       UPDATE SET
         T.`Daily Views`     = S.`Daily Views`,
-        T.`Daily Favorites` = S.`Daily Favorites`
+        T.`Daily Favorites` = S.`Daily Favorites`,
+        T.updated_at        = CURRENT_TIMESTAMP()
     WHEN NOT MATCHED THEN
-      INSERT ROW
+      INSERT (
+        `Date`, `Photo ID`, `Photo Title`, `Daily Views`, `Daily Favorites`,
+        `Secret`, `Server`, `Link`, `thumbnail`, `loaded_at`, `updated_at`
+      )
+      VALUES (
+        S.Date, S.`Photo ID`, S.`Photo Title`, S.`Daily Views`, S.`Daily Favorites`,
+        S.Secret, S.Server, S.Link, S.thumbnail, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP()
+      )
     """
     query_job = bq_client.query(merge_sql)
     query_job.result()
