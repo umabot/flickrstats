@@ -10,6 +10,7 @@ A Python tool to fetch and analyze photo statistics from your Flickr account. Th
 - **Input Validation**: Validates date formats and ranges before processing
 - **CSV Export**: Tab-delimited output for easy analysis in Excel or other tools
 - **Secure Authentication**: OAuth-based authentication with token caching
+- **Cloud-Native Daily Run**: Automated daily extraction via Google Cloud Functions + BigQuery
 
 ## Flickr Daily Photo Stats (`flickrGetDailyPhotoViews.py`)
 
@@ -111,13 +112,130 @@ The Flickr API has rate limits (typically 3,600 requests per hour):
 - Ensure your Flickr app has 'read' permissions
 - Check that your API key and secret are still valid in the Flickr App Garden
 
+---
+
+## Cloud Deployment (Google Cloud Functions + BigQuery)
+
+`main.py` contains a Cloud Function (`main_handler`) that replaces the manual
+script with a fully automated, daily, serverless pipeline.
+
+### Architecture
+
+```
+Cloud Scheduler (02:00 UTC daily)
+        │  HTTP trigger
+        ▼
+Cloud Function: flickr-daily-extract  (main.py → main_handler)
+        │
+        │ 1. Fetch yesterday's stats from Flickr API
+        ▼
+BigQuery: flickrstats.stage_daily_extract
+        │
+        │ 2. MERGE (upsert on Date + Photo ID)
+        ▼
+BigQuery: flickrstats.flickrstats_all
+        │
+        │ 3. TRUNCATE stage table
+        ▼
+        ✓ Done
+```
+
+### BigQuery Tables
+
+Both tables share the same schema defined in `my_schema.json`:
+
+| Column | Type | Mode | Notes |
+|---|---|---|---|
+| Date | DATE | NULLABLE | Composite PK (with Photo ID) |
+| Photo ID | INTEGER | NULLABLE | Composite PK |
+| Photo Title | STRING | NULLABLE | |
+| Daily Views | INTEGER | NULLABLE | Updated on match |
+| Daily Favorites | INTEGER | NULLABLE | Updated on match |
+| Secret | STRING | NULLABLE | Used to construct URLs |
+| Server | INTEGER | NULLABLE | Used to construct URLs |
+| Link | STRING | NULLABLE | Full Flickr photo page URL |
+| thumbnail | STRING | NULLABLE | 75 x 75 px square-crop URL |
+
+Create both tables in the Google Cloud Console using `my_schema.json`:
+```
+flickrstats-492309.flickrstats.flickrstats_all
+flickrstats-492309.flickrstats.stage_daily_extract
+```
+
+### One-Time Local Setup — Obtain OAuth Tokens
+
+The Cloud Function uses pre-obtained OAuth tokens (no browser).  Run the
+interactive script **once** on your local machine to generate them:
+
+```bash
+python3 flickrGetDailyPhotoViews.py
+```
+
+After authorising in the browser, flickrapi caches the token locally (usually
+in `~/.flickr/`).  Note down the `oauth_token` and `oauth_token_secret` values
+from that file.
+
+### Store Secrets in Cloud Secret Manager
+
+In the Google Cloud Console, create four secrets:
+
+| Secret name | Value |
+|---|---|
+| `flickr-api-key` | Your Flickr API key |
+| `flickr-api-secret` | Your Flickr API secret |
+| `flickr-oauth-token` | OAuth access token from local run |
+| `flickr-oauth-token-secret` | OAuth access token secret from local run |
+
+Grant the Cloud Function's service account the role
+`roles/secretmanager.secretAccessor` on each secret.
+
+### Deploy via Cloud Build (CI/CD)
+
+`cloudbuild.yaml` automates deployment whenever you push to `main`.
+
+**One-time setup in Google Cloud Console:**
+
+1. Enable APIs: **Cloud Build**, **Cloud Functions**, **Secret Manager**, **BigQuery**.
+2. Create a service account `flickr-extractor@flickrstats-492309.iam.gserviceaccount.com`
+   and grant it:
+   - `roles/bigquery.dataEditor` on the `flickrstats` dataset
+   - `roles/bigquery.jobUser` on the project
+   - `roles/secretmanager.secretAccessor` on each secret
+3. Grant the **Cloud Build** service account:
+   - `roles/cloudfunctions.developer`
+   - `roles/iam.serviceAccountUser` (to act as the function's service account)
+4. In **Cloud Build → Triggers**, connect your GitHub repository and create a
+   trigger on push to `main` using the `cloudbuild.yaml` configuration file.
+
+### Configure Cloud Scheduler
+
+In the Google Cloud Console, create a Cloud Scheduler job:
+
+| Setting | Value |
+|---|---|
+| Frequency | `0 2 * * *` (02:00 UTC daily) |
+| Target type | HTTP |
+| URL | The Cloud Function HTTPS URL |
+| Auth header | Add OIDC token — service account: `flickr-extractor@…` |
+
+### Manual Invocation
+
+To trigger the function manually (e.g. for testing):
+
+```bash
+gcloud functions call flickr-daily-extract --region=us-central1
+```
+
 ## Project Structure
 
 ```
 flickrstats/
-├── flickrGetDailyPhotoViews.py  # Main production script
-├── flickr_auth.py               # Shared authentication module
+├── main.py                      # Cloud Function entry point
+├── flickrGetDailyPhotoViews.py  # Local interactive script
+├── flickr_auth.py               # Shared authentication module (local + cloud)
+├── my_schema.json               # BigQuery table schema
 ├── requirements.txt             # Python dependencies
+├── cloudbuild.yaml              # CI/CD: GitHub → Cloud Build → Cloud Functions
 ├── README.md                    # This file
 ├── .env                         # API credentials (not in git)
 ├── .gitignore                   # Git ignore patterns

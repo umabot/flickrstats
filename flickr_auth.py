@@ -3,12 +3,25 @@
 This module provides functions to authenticate with the Flickr API using OAuth.
 It handles credential loading from environment variables and manages the
 authentication flow.
+
+Two authentication modes are supported:
+
+* **Interactive** (``get_authenticated_client``): Opens a browser for the user
+  to authorise the app and stores the resulting token locally.  Use this when
+  running the script on a local machine for the first time.
+
+* **Non-interactive / Cloud** (``get_cloud_authenticated_client``): Reads an
+  already-obtained OAuth access token from environment variables
+  (``FLICKR_OAUTH_TOKEN`` and ``FLICKR_OAUTH_TOKEN_SECRET``).  Use this for
+  headless environments such as Google Cloud Functions where browser interaction
+  is impossible.  The token is injected at runtime via Cloud Secret Manager.
 """
 
 import os
 import webbrowser
 import flickrapi
 from dotenv import load_dotenv
+from flickrapi.auth import FlickrAccessToken
 from typing import Tuple
 
 
@@ -88,3 +101,43 @@ def get_authenticated_client() -> flickrapi.FlickrAPI:
     """
     api_key, api_secret = load_credentials()
     return authenticate_flickr(api_key, api_secret)
+
+
+def get_cloud_authenticated_client() -> flickrapi.FlickrAPI:
+    """Get an authenticated Flickr API client for headless / cloud environments.
+
+    Instead of launching a browser, this function reconstructs the OAuth
+    session from an access token and token secret that were previously obtained
+    via ``get_authenticated_client()`` on a local machine and stored in
+    Google Cloud Secret Manager (surfaced as environment variables by the
+    Cloud Functions runtime).
+
+    Required environment variables:
+        FLICKR_API_KEY            – Flickr application API key.
+        FLICKR_API_SECRET         – Flickr application API secret.
+        FLICKR_OAUTH_TOKEN        – OAuth access token.
+        FLICKR_OAUTH_TOKEN_SECRET – OAuth access token secret.
+
+    Returns:
+        Authenticated FlickrAPI instance with parsed-json format.
+
+    Raises:
+        ValueError: If any of the four required environment variables are absent.
+    """
+    api_key, api_secret = load_credentials()
+
+    oauth_token = os.getenv("FLICKR_OAUTH_TOKEN")
+    oauth_token_secret = os.getenv("FLICKR_OAUTH_TOKEN_SECRET")
+
+    if not oauth_token or not oauth_token_secret:
+        raise ValueError(
+            "Missing Flickr OAuth token credentials for cloud deployment. "
+            "Ensure FLICKR_OAUTH_TOKEN and FLICKR_OAUTH_TOKEN_SECRET are set "
+            "as environment variables (via Cloud Secret Manager)."
+        )
+
+    flickr = flickrapi.FlickrAPI(api_key, api_secret, format="parsed-json")
+    flickr.token_cache.token = FlickrAccessToken(
+        oauth_token, oauth_token_secret, "read"
+    )
+    return flickr
