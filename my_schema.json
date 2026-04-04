@@ -1,0 +1,47 @@
+[
+  {
+    "mode": "NULLABLE",
+    "name": "Date",
+    "type": "DATE"
+  },
+  {
+    "mode": "NULLABLE",
+    "name": "Photo ID",
+    "type": "INTEGER"
+  },
+  {
+    "mode": "NULLABLE",
+    "name": "Photo Title",
+    "type": "STRING"
+  },
+  {
+    "mode": "NULLABLE",
+    "name": "Daily Views",
+    "type": "INTEGER"
+  },
+  {
+    "mode": "NULLABLE",
+    "name": "Daily Favorites",
+    "type": "INTEGER"
+  },
+  {
+    "mode": "NULLABLE",
+    "name": "Secret",
+    "type": "STRING"
+  },
+  {
+    "mode": "NULLABLE",
+    "name": "Server",
+    "type": "INTEGER"
+  },
+  {
+    "mode": "NULLABLE",
+    "name": "Link",
+    "type": "STRING"
+  },
+  {
+    "mode": "NULLABLE",
+    "name": "thumbnail",
+    "type": "STRING"
+  }
+]

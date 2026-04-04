@@ -1,0 +1,37 @@
+# Cloud Build configuration for deploying the Flickr daily stats Cloud Function.
+#
+# Trigger: Push to the main branch (configured in the Cloud Build Triggers UI).
+# What it does: Deploys the flickr-daily-extract Cloud Function to us-central1.
+#
+# Prerequisites (one-time setup in Google Cloud Console):
+#   1. Enable APIs: Cloud Build, Cloud Functions, Secret Manager, BigQuery.
+#   2. Create Secret Manager secrets (see README.md — Cloud Deployment section):
+#        flickr-api-key, flickr-api-secret,
+#        flickr-oauth-token, flickr-oauth-token-secret
+#   3. Grant the Cloud Build service account the roles:
+#        roles/cloudfunctions.developer
+#        roles/iam.serviceAccountUser          (to act as the function's SA)
+#   4. Connect the GitHub repository to Cloud Build via the Triggers UI.
+
+steps:
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    id: deploy-cloud-function
+    args:
+      - gcloud
+      - functions
+      - deploy
+      - flickr-daily-extract
+      - --region=us-central1
+      - --runtime=python311
+      - --trigger-http
+      - --entry-point=main_handler
+      - --timeout=540s
+      - --memory=256MB
+      - --service-account=flickr-extractor@flickrstats-492309.iam.gserviceaccount.com
+      - --no-allow-unauthenticated
+      - >-
+        --set-secrets=FLICKR_API_KEY=flickr-api-key:latest,FLICKR_API_SECRET=flickr-api-secret:latest,FLICKR_OAUTH_TOKEN=flickr-oauth-token:latest,FLICKR_OAUTH_TOKEN_SECRET=flickr-oauth-token-secret:latest
+
+# Only build from the main branch.
+options:
+  logging: CLOUD_LOGGING_ONLY
