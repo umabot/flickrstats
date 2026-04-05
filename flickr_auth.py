@@ -136,8 +136,18 @@ def get_cloud_authenticated_client() -> flickrapi.FlickrAPI:
             "as environment variables (via Cloud Secret Manager)."
         )
 
-    flickr = flickrapi.FlickrAPI(api_key, api_secret, format="parsed-json")
-    flickr.token_cache.token = FlickrAccessToken(
+    # flickr = flickrapi.FlickrAPI(api_key, api_secret, format="parsed-json")
+    # flickr.token_cache.token = FlickrAccessToken(
         oauth_token, oauth_token_secret, "read"
+    # )
+    # return flickr
+
+    token = FlickrAccessToken(oauth_token, oauth_token_secret, "read")
+
+    return flickrapi.FlickrAPI(
+        api_key,
+        api_secret,
+        token=token,
+        format="parsed-json",
+        store_token=False,
     )
-    return flickr
