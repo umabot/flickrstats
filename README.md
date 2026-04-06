@@ -119,6 +119,9 @@ The Flickr API has rate limits (typically 3,600 requests per hour):
 `main.py` contains a Cloud Function (`main_handler`) that replaces the manual
 script with a fully automated, daily, serverless pipeline.
 
+For a CLI-first deployment guide with verified `gcloud` commands and captured
+output, see [`DEPLOYMENT.md`](./DEPLOYMENT.md).
+
 ### Architecture
 
 ```
@@ -196,7 +199,7 @@ Grant the Cloud Function's service account the role
 **One-time setup in Google Cloud Console:**
 
 1. Enable APIs: **Cloud Build**, **Cloud Functions**, **Secret Manager**, **BigQuery**.
-2. Create a service account `flickr-extractor@flickrstats-492309.iam.gserviceaccount.com`
+2. Create a service account `flickr-stats-loader@flickrstats-492309.iam.gserviceaccount.com`
    and grant it:
    - `roles/bigquery.dataEditor` on the `flickrstats` dataset
    - `roles/bigquery.jobUser` on the project
@@ -216,14 +219,14 @@ In the Google Cloud Console, create a Cloud Scheduler job:
 | Frequency | `0 2 * * *` (02:00 UTC daily) |
 | Target type | HTTP |
 | URL | The Cloud Function HTTPS URL |
-| Auth header | Add OIDC token — service account: `flickr-extractor@…` |
+| Auth header | Add OIDC token — service account: `flickr-stats-loader@flickrstats-492309.iam.gserviceaccount.com` |
 
 ### Manual Invocation
 
 To trigger the function manually (e.g. for testing):
 
 ```bash
-gcloud functions call flickr-daily-extract --region=us-central1
+gcloud functions call flickr-daily-extract --region=europe-west9
 ```
 
 You can also test the deployed HTTP endpoint with an optional JSON payload.
