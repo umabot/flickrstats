@@ -226,6 +226,19 @@ To trigger the function manually (e.g. for testing):
 gcloud functions call flickr-daily-extract --region=us-central1
 ```
 
+You can also test the deployed HTTP endpoint with an optional JSON payload.
+If `Date` is supplied in `YYYY-MM-DD` format, the function will use that date;
+otherwise it falls back to **yesterday**. Any other payload fields are ignored.
+
+```bash
+curl -X POST "https://flickr-daily-extract-781796249121.europe-west9.run.app" \
+  -H "Authorization: bearer $(gcloud auth print-identity-token)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "Date": "2026-04-01"
+  }'
+```
+
 ## Project Structure
 
 ```

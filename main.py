@@ -262,31 +262,87 @@ def truncate_stage(bq_client: bigquery.Client) -> None:
     logger.info("Staging table %s truncated.", BQ_STAGE_TABLE)
 
 
+def resolve_requested_date(request) -> str:
+    """Resolve the date to process from the optional request JSON payload.
+
+    Uses the payload field `Date` when present and valid in YYYY-MM-DD format.
+    Otherwise, falls back to yesterday in UTC. Any other payload keys are
+    ignored.
+
+    Args:
+        request: Flask Request object.
+
+    Returns:
+        Date string in YYYY-MM-DD format.
+    """
+    default_date = (
+        datetime.now(timezone.utc) - timedelta(days=1)
+    ).strftime(DATE_FORMAT)
+
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        logger.info("No JSON payload supplied. Using default date: %s", default_date)
+        return default_date
+
+    requested_date = payload.get("Date")
+    if requested_date is None:
+        logger.info("No Date provided in payload. Using default date: %s", default_date)
+        return default_date
+
+    if not isinstance(requested_date, str):
+        logger.warning(
+            "Ignoring non-string Date value %r. Using default date: %s",
+            requested_date,
+            default_date,
+        )
+        return default_date
+
+    try:
+        resolved_date = datetime.strptime(requested_date, DATE_FORMAT).strftime(
+            DATE_FORMAT
+        )
+        logger.info("Using requested date from payload: %s", resolved_date)
+        return resolved_date
+    except ValueError:
+        logger.warning(
+            "Ignoring invalid Date value %r. Expected format %s. Using default "
+            "date: %s",
+            requested_date,
+            DATE_FORMAT,
+            default_date,
+        )
+        return default_date
+
+
 # ---------------------------------------------------------------------------
 # Cloud Function entry point
 # ---------------------------------------------------------------------------
 
-def main_handler(request):  # noqa: ARG001
+def main_handler(request):
     """HTTP Cloud Function entry point.
 
-    Intended to be called by Cloud Scheduler once per day.  Processes the
-    previous calendar day's Flickr stats and upserts them into BigQuery.
+    Intended to be called by Cloud Scheduler once per day. Processes the
+    previous calendar day's Flickr stats by default and upserts them into
+    BigQuery.
+
+    When manually testing the function, the request JSON payload may include
+    an optional `Date` field in YYYY-MM-DD format. If it is missing or invalid,
+    the function falls back to yesterday in UTC.
 
     Args:
-        request: Flask Request object (not used; all parameters are derived
-                 from environment variables and the current date).
+        request: Flask Request object with an optional JSON payload.
 
     Returns:
         Tuple of (message, HTTP status code).
     """
-    yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime(DATE_FORMAT)
-    logger.info("Starting Flickr stats extraction for: %s", yesterday)
+    processing_date = resolve_requested_date(request)
+    logger.info("Starting Flickr stats extraction for: %s", processing_date)
 
     flickr_client = get_cloud_authenticated_client()
-    rows = fetch_flickr_stats(flickr_client, yesterday)
+    rows = fetch_flickr_stats(flickr_client, processing_date)
 
     if not rows:
-        msg = f"No data returned from Flickr for {yesterday}."
+        msg = f"No data returned from Flickr for {processing_date}."
         logger.warning(msg)
         return msg, 200
 
@@ -295,6 +351,6 @@ def main_handler(request):  # noqa: ARG001
     run_merge(bq_client)
     truncate_stage(bq_client)
 
-    msg = f"Successfully processed {len(rows)} rows for {yesterday}."
+    msg = f"Successfully processed {len(rows)} rows for {processing_date}."
     logger.info(msg)
     return msg, 200
