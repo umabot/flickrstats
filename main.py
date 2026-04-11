@@ -26,7 +26,7 @@ Environment variables required (recommended via Cloud Secret Manager):
 
 Deployment:
     Deployed automatically by Cloud Build on every push to main (see
-    cloudbuild.yaml).  The Cloud Scheduler job at 02:00 UTC calls the HTTPS
+    cloudbuild.yaml).  The Cloud Scheduler job at 05:00 UTC calls the HTTPS
     endpoint to kick off the daily run.
 """
 
@@ -62,7 +62,11 @@ THUMBNAIL_URL_TEMPLATE = (
 )
 
 logging.basicConfig(level=logging.INFO)
+# In Cloud Functions/Cloud Run, handlers may already exist before this module
+# is imported, so basicConfig can be ignored. Set levels explicitly.
+logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 # ---------------------------------------------------------------------------
@@ -146,7 +150,7 @@ def fetch_flickr_stats(flickr_client, date: str) -> list:
 
         total_pages = initial["photos"]["pages"]
         logger.info(
-            "Date: %s — pages: %d, total photos: %s",
+            "Date: %s - pages: %d, total photos: %s",
             date, total_pages, initial["photos"]["total"],
         )
 

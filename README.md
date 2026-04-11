@@ -125,7 +125,7 @@ output, see [`DEPLOYMENT.md`](./DEPLOYMENT.md).
 ### Architecture
 
 ```
-Cloud Scheduler (02:00 UTC daily)
+Cloud Scheduler (05:00 UTC daily)
         │  HTTP trigger
         ▼
 Cloud Function: flickr-daily-extract  (main.py → main_handler)
@@ -216,7 +216,7 @@ In the Google Cloud Console, create a Cloud Scheduler job:
 
 | Setting | Value |
 |---|---|
-| Frequency | `0 2 * * *` (02:00 UTC daily) |
+| Frequency | `0 5 * * *` (02:00 UTC daily) |
 | Target type | HTTP |
 | URL | The Cloud Function HTTPS URL |
 | Auth header | Add OIDC token — service account: `flickr-stats-loader@flickrstats-492309.iam.gserviceaccount.com` |

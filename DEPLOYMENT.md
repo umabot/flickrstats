@@ -147,18 +147,8 @@ gcloud scheduler jobs list --project=flickrstats-492309 --location=europe-west1
 
 ```text
 ID                          LOCATION      SCHEDULE (TZ)             TARGET_TYPE  STATE
-flickr-daily-stats-trigger  europe-west1  0 2 * * * (Europe/Paris)  HTTP         ENABLED
+flickr-daily-stats-trigger  europe-west1  0 5 * * * (Europe/Paris)  HTTP         ENABLED
 ```
-
-### Important note
-
-Running the same command with `--location=europe-west9` returned:
-
-```text
-ERROR: (gcloud.scheduler.jobs.list) INVALID_ARGUMENT: Location 'europe-west9' is not a valid location. Use ListLocations to list valid locations.
-```
-
-So the scheduler job should be managed from **`europe-west1`**, not `europe-west9`.
 
 ---
 
