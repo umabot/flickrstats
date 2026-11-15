@@ -221,6 +221,32 @@ In the Google Cloud Console, create a Cloud Scheduler job:
 | URL | The Cloud Function HTTPS URL |
 | Auth header | Add OIDC token — service account: `flickr-stats-loader@flickrstats-492309.iam.gserviceaccount.com` |
 
+### Photo title cleansing
+
+The separately deployed `flickr-title-cleanse` function runs at 07:00
+Europe/Paris, two hours after the documented 05:00 daily extraction schedule.
+It does not change `main.py` or the extraction schedule. Operators must not
+run the loader or other writers while cleansing is in progress; the schedule
+alone does not enforce mutual exclusion.
+
+The cleanser groups by Photo ID and only considers IDs with more than one
+distinct non-NULL title. It selects the title with the latest non-NULL
+`updated_at`, excluding NULL titles and titles starting with `PXL`, `IMG`,
+`CR2`, `20`, or `P100` (case-sensitive, as in the supplied query). All `20`
+prefixes are excluded even when the title is legitimate. Empty strings are not
+excluded by these rules. IDs with no eligible title or different eligible
+titles tied at the latest timestamp are skipped and logged.
+
+For each eligible ID, all its rows are saved in
+`flickrstats.flickrstats_titles_changed` with a backup run ID and timestamp.
+The backup insert and the update are transactional; only `Photo Title` is
+updated in the main table. If there are no eligible IDs, no backup or update
+is performed. Repeated runs leave already-cleansed photos unchanged.
+
+`updated_at` also changes when statistics are refreshed. The selection rule
+assumes existing dates are not rerun with a stale title. See
+[`DEPLOYMENT.md`](./DEPLOYMENT.md) for permissions, scheduling and recovery.
+
 ### Manual Invocation
 
 To trigger the function manually (e.g. for testing):

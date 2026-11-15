@@ -1,7 +1,7 @@
 # Cloud Build configuration for deploying the Flickr daily stats Cloud Function.
 #
 # Trigger: Push to the main branch (configured in the Cloud Build Triggers UI).
-# What it does: Deploys the flickr-daily-extract Cloud Function to us-central1.
+# What it does: Tests and deploys the daily extractor and title cleanser.
 #
 # Prerequisites (one-time setup in Google Cloud Console):
 #   1. Enable APIs: Cloud Build, Cloud Functions, Secret Manager, BigQuery.
@@ -14,6 +14,11 @@
 #   4. Connect the GitHub repository to Cloud Build via the Triggers UI.
 
 steps:
+  - name: "python:3.11-slim"
+    id: test-title-cleanse
+    entrypoint: python
+    args: ["-m", "unittest", "discover", "-s", "tests", "-v"]
+
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     id: deploy-cloud-function
     args:
@@ -32,6 +37,55 @@ steps:
       - >-
         --set-secrets=FLICKR_API_KEY=flickr-api-key:latest,FLICKR_API_SECRET=flickr-api-secret:latest,FLICKR_OAUTH_TOKEN=flickr-oauth-token:latest,FLICKR_OAUTH_TOKEN_SECRET=flickr-oauth-token-secret:latest
 
-# Only build from the main branch.
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    id: deploy-title-cleanser
+    args:
+      - gcloud
+      - functions
+      - deploy
+      - flickr-title-cleanse
+      - --gen2
+      - --region=europe-west9
+      - --runtime=python311
+      - --source=title_cleanse
+      - --trigger-http
+      - --entry-point=main_handler
+      - --timeout=540s
+      - --memory=256MB
+      - --max-instances=1
+      - --concurrency=1
+      - --service-account=flickr-stats-loader@flickrstats-492309.iam.gserviceaccount.com
+      - --no-allow-unauthenticated
+      - --quiet
+
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    id: configure-title-scheduler
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -eu
+        url="$$(gcloud functions describe flickr-title-cleanse --gen2 \
+          --project="$PROJECT_ID" --region=europe-west9 --format='value(serviceConfig.uri)')"
+        test -n "$$url"
+        gcloud run services add-iam-policy-binding flickr-title-cleanse \
+          --project="$PROJECT_ID" --region=europe-west9 \
+          --member="serviceAccount:flickr-stats-loader@flickrstats-492309.iam.gserviceaccount.com" \
+          --role=roles/run.invoker --quiet
+        jobs="$$(gcloud scheduler jobs list --project="$PROJECT_ID" \
+          --location=europe-west1 --format='value(name)')"
+        if printf '%s\n' "$$jobs" | grep -Eq '(^|/)flickr-title-cleanse-trigger$$'; then
+          operation=update
+        else
+          operation=create
+        fi
+        gcloud scheduler jobs "$$operation" http flickr-title-cleanse-trigger \
+          --project="$PROJECT_ID" --location=europe-west1 \
+          --schedule='0 7 * * *' --time-zone=Europe/Paris \
+          --uri="$$url" --http-method=POST --message-body='{}' \
+          --oidc-service-account-email=flickr-stats-loader@flickrstats-492309.iam.gserviceaccount.com \
+          --oidc-token-audience="$$url" --attempt-deadline=540s --quiet
+
+# The main-branch restriction is configured in the Cloud Build trigger.
 options:
   logging: CLOUD_LOGGING_ONLY

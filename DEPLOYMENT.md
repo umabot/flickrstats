@@ -245,6 +245,45 @@ bq show --format=prettyjson flickrstats-492309:flickrstats
 
 ## 9) Useful day-2 operations
 
+### Title cleansing deployment and operation
+
+`cloudbuild.yaml` runs the title-selection tests, deploys the separate
+`flickr-title-cleanse` function from `title_cleanse/`, grants the scheduler
+service account permission to invoke it, and creates or updates the
+`flickr-title-cleanse-trigger` Scheduler job. The job runs at 07:00
+Europe/Paris in `europe-west1`; the function and BigQuery dataset are in
+`europe-west9`. Confirm the existing daily job is still scheduled for 05:00
+Europe/Paris before deploying. This is two hours after its scheduled start,
+not necessarily two hours after its completion.
+
+In addition to the existing function deployment permissions, the Cloud Build
+service account needs permission to manage Cloud Scheduler jobs, grant
+`roles/run.invoker` on the new Cloud Run service, and act as
+`flickr-stats-loader`. The loader service account needs BigQuery job creation
+and dataset read/write permissions, including permission to create the backup
+table. The Scheduler service agent must be able to mint the configured OIDC
+token. The Cloud Build trigger and its main-branch restriction remain
+configured outside this repository.
+
+The two-hour gap is **not a lock**. Do not manually invoke the loader or run
+other writers against the target table while the cleanser is running. Ensure
+the daily extraction has finished before the scheduled cleanse; if it has
+not, pause the cleansing scheduler and resume it only after the load finishes.
+The cleanser itself is limited to one concurrent request.
+
+The first run with eligible changes creates
+`flickrstats-492309.flickrstats.flickrstats_titles_changed`. Each successful
+run appends the original full rows with `backup_run_id` and `backup_at`.
+Backup and title updates commit together. Cloud logs report the run ID,
+counts, and any IDs skipped because no valid dated title exists or the latest
+timestamp has conflicting titles. Investigate skipped IDs separately.
+
+To recover, identify the appropriate `backup_run_id` and restore only the
+desired `Photo Title` values from that run, after stopping writers and
+verifying row identity and backup contents. Do not replace the main table
+with the backup: the backup contains only affected photos and may contain
+multiple runs.
+
 ### Manually invoke the deployed endpoint
 
 ```bash
