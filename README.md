@@ -100,7 +100,7 @@ If you see `ValueError: Missing Flickr API credentials`:
 The Flickr API has rate limits (typically 3,600 requests per hour):
 - The script automatically retries with exponential backoff when rate limits are hit
 - For large date ranges (months or years), consider running in smaller batches
-- The script will wait and retry up to 3 times before giving up on a request
+- The script makes up to 3 attempts before giving up on a request
 
 ### Date Validation Errors
 - Dates must be in YYYY-MM-DD format (e.g., 2024-01-15)
@@ -119,18 +119,18 @@ The Flickr API has rate limits (typically 3,600 requests per hour):
 `main.py` contains a Cloud Function (`main_handler`) that replaces the manual
 script with a fully automated, daily, serverless pipeline.
 
-For a CLI-first deployment guide with verified `gcloud` commands and captured
-output, see [`DEPLOYMENT.md`](./DEPLOYMENT.md).
+For deployment, Scheduler status, function logs, and operational guidance, see
+[`DEPLOYMENT.md`](./DEPLOYMENT.md).
 
 ### Architecture
 
 ```
-Cloud Scheduler (05:00 UTC daily)
+Cloud Scheduler (05:00 Europe/Paris daily)
         │  HTTP trigger
         ▼
 Cloud Function: flickr-daily-extract  (main.py → main_handler)
         │
-        │ 1. Fetch yesterday's stats from Flickr API
+        │ 1. Fetch yesterday's stats (UTC) from Flickr API
         ▼
 BigQuery: flickrstats.stage_daily_extract
         │
@@ -145,21 +145,25 @@ BigQuery: flickrstats.flickrstats_all
 
 ### BigQuery Tables
 
-Both tables share the same schema defined in `my_schema.json`:
+The table schemas are defined separately in
+[`docs/stage_daily_extract.schema.json`](./docs/stage_daily_extract.schema.json)
+and [`docs/flickrstats_all.schema.json`](./docs/flickrstats_all.schema.json).
+They share these fields:
 
 | Column | Type | Mode | Notes |
 |---|---|---|---|
-| Date | DATE | NULLABLE | Composite PK (with Photo ID) |
-| Photo ID | INTEGER | NULLABLE | Composite PK |
+| Date | DATE | NULLABLE | Merge key (with Photo ID) |
+| Photo ID | INTEGER | NULLABLE | Merge key |
 | Photo Title | STRING | NULLABLE | |
 | Daily Views | INTEGER | NULLABLE | Updated on match |
 | Daily Favorites | INTEGER | NULLABLE | Updated on match |
 | Secret | STRING | NULLABLE | Used to construct URLs |
 | Server | INTEGER | NULLABLE | Used to construct URLs |
 | Link | STRING | NULLABLE | Full Flickr photo page URL |
-| thumbnail | STRING | NULLABLE | 75 x 75 px square-crop URL |
+| thumbnail | STRING | NULLABLE | Flickr thumbnail URL |
 
-Create both tables in the Google Cloud Console using `my_schema.json`:
+The target table also has `loaded_at` and `updated_at` TIMESTAMP fields. Create
+the tables in the Google Cloud Console using their respective schema files:
 ```
 flickrstats-492309.flickrstats.flickrstats_all
 flickrstats-492309.flickrstats.stage_daily_extract
@@ -194,11 +198,13 @@ Grant the Cloud Function's service account the role
 
 ### Deploy via Cloud Build (CI/CD)
 
-`cloudbuild.yaml` automates deployment whenever you push to `main`.
+`cloudbuild.yaml` tests and deploys both functions and configures the
+title-cleanse Scheduler job when the configured trigger runs on `main`.
 
 **One-time setup in Google Cloud Console:**
 
-1. Enable APIs: **Cloud Build**, **Cloud Functions**, **Secret Manager**, **BigQuery**.
+1. Enable the required APIs, including **Cloud Build**, **Cloud Functions**,
+   **Cloud Run**, **Cloud Scheduler**, **Secret Manager**, and **BigQuery**.
 2. Create a service account `flickr-stats-loader@flickrstats-492309.iam.gserviceaccount.com`
    and grant it:
    - `roles/bigquery.dataEditor` on the `flickrstats` dataset
@@ -207,19 +213,29 @@ Grant the Cloud Function's service account the role
 3. Grant the **Cloud Build** service account:
    - `roles/cloudfunctions.developer`
    - `roles/iam.serviceAccountUser` (to act as the function's service account)
+   - Permissions to manage Scheduler jobs and grant `roles/run.invoker` on
+     the title-cleanse Cloud Run service
 4. In **Cloud Build → Triggers**, connect your GitHub repository and create a
    trigger on push to `main` using the `cloudbuild.yaml` configuration file.
 
+See [`DEPLOYMENT.md`](./DEPLOYMENT.md) for additional permissions and
+operational requirements.
+
 ### Configure Cloud Scheduler
 
-In the Google Cloud Console, create a Cloud Scheduler job:
+For the daily extractor, configure a Cloud Scheduler job in `europe-west1`:
 
 | Setting | Value |
 |---|---|
-| Frequency | `0 5 * * *` (02:00 UTC daily) |
+| Frequency | `0 5 * * *` (05:00 Europe/Paris daily) |
 | Target type | HTTP |
 | URL | The Cloud Function HTTPS URL |
 | Auth header | Add OIDC token — service account: `flickr-stats-loader@flickrstats-492309.iam.gserviceaccount.com` |
+
+Cloud Build creates or updates the separate title-cleanse job at 07:00
+Europe/Paris. See the [Scheduler inspection commands](./DEPLOYMENT.md#5-inspect-cloud-scheduler)
+and [function log commands](./DEPLOYMENT.md#check-recent-function-logs) to
+check both jobs and their runs.
 
 ### Photo title cleansing
 
@@ -251,13 +267,17 @@ assumes existing dates are not rerun with a stale title. See
 
 To trigger the function manually (e.g. for testing):
 
+Do not invoke the extractor while title cleansing is running.
+
 ```bash
-gcloud functions call flickr-daily-extract --region=europe-west9
+gcloud functions call flickr-daily-extract \
+  --project=flickrstats-492309 --region=europe-west9
 ```
 
 You can also test the deployed HTTP endpoint with an optional JSON payload.
 If `Date` is supplied in `YYYY-MM-DD` format, the function will use that date;
-otherwise it falls back to **yesterday**. Any other payload fields are ignored.
+otherwise it falls back to **yesterday in UTC**. Any other payload fields are
+ignored.
 
 ```bash
 curl -X POST "https://flickr-daily-extract-781796249121.europe-west9.run.app" \
@@ -275,10 +295,13 @@ flickrstats/
 ├── main.py                      # Cloud Function entry point
 ├── flickrGetDailyPhotoViews.py  # Local interactive script
 ├── flickr_auth.py               # Shared authentication module (local + cloud)
-├── my_schema.json               # BigQuery table schema
+├── docs/                        # BigQuery table schemas
+├── title_cleanse/               # Title-cleanse function and SQL
+├── tests/                       # Title-cleanse tests
 ├── requirements.txt             # Python dependencies
 ├── cloudbuild.yaml              # CI/CD: GitHub → Cloud Build → Cloud Functions
 ├── README.md                    # This file
+├── DEPLOYMENT.md                # Cloud operations guide
 ├── .env                         # API credentials (not in git)
 ├── .gitignore                   # Git ignore patterns
 ├── archive/                     # Deprecated/experimental scripts
@@ -299,7 +322,7 @@ flickrstats/
 
 ### API Configuration
 - Default page size: 100 photos per request (max: 500)
-- Retry attempts: 3 with exponential backoff (2s, 4s, 8s delays)
+- Up to 3 attempts with exponential backoff (2s and 4s delays)
 - CSV delimiter: Tab character for better compatibility with titles containing commas
 
 ### Error Handling
@@ -309,11 +332,18 @@ The script includes comprehensive error handling:
 - Invalid dates: Validates format and logical consistency
 - Missing credentials: Clear error messages with setup guidance
 
-## Author & Project Notes
+## Author & Project Notes (NOTE to AGENT: do not edit below this line)
+**New Process**
+*   Since mid 2026 all the process runs automatic to gather stats and ssave them in the BigQuery database.
+*   The statistics are now consulted from a Google Data Studio dashboard
 
 **Data Backup & Personal Documentation (Author-Specific):**
-*   The author periodically saves a full set of generated data to Google Drive (personal account, file `Flickr Stats v2`).
 *   Additional project documentation and notes by the author may be found in their Obsidian vault (note titled `Flickr Photo Project - my stats`).
+
+### Deprecated Author Notes
+This is not done anymore. Since mid 2026 the stats are only updated andsaved in the BigQuery database.
+*   The author periodically saves a full set of generated data to Google Drive (personal account, file `Flickr Stats v2`).
+
 
 **Repository Notes:**
 *   The `.gitignore` file is configured to exclude sensitive files (`.env`), generated data (`*.csv`), and Python artifacts (`venv/`, `__pycache__/`).
