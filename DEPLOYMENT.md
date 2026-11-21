@@ -150,6 +150,27 @@ ID                          LOCATION      SCHEDULE (TZ)             TARGET_TYPE 
 flickr-daily-stats-trigger  europe-west1  0 5 * * * (Europe/Paris)  HTTP         ENABLED
 ```
 
+This output predates the title-cleanse job. To inspect the current schedule,
+state, and most recent attempt for each job:
+
+```bash
+gcloud scheduler jobs describe flickr-daily-stats-trigger \
+  --project=flickrstats-492309 \
+  --location=europe-west1 \
+  --format='yaml(state,schedule,timeZone,lastAttemptTime,status)'
+
+gcloud scheduler jobs describe flickr-title-cleanse-trigger \
+  --project=flickrstats-492309 \
+  --location=europe-west1 \
+  --format='yaml(state,schedule,timeZone,lastAttemptTime,status)'
+```
+
+`ENABLED` means the job is scheduled, not that its last invocation succeeded.
+Check `lastAttemptTime` and `status`, then inspect the function logs below for
+the outcome. A missing `lastAttemptTime` can indicate the job has not yet run.
+`NOT_FOUND` means the named job was not found in the specified project and
+location.
+
 ---
 
 ## 6) Inspect Secret Manager
@@ -295,13 +316,28 @@ curl -X POST "https://flickr-daily-extract-781796249121.europe-west9.run.app" \
 
 ### Check recent function logs
 
+The functions run in `europe-west9`, while their Scheduler jobs are in
+`europe-west1`:
+
 ```bash
 gcloud functions logs read flickr-daily-extract \
   --project=flickrstats-492309 \
   --region=europe-west9 \
   --gen2 \
   --limit=50
+
+gcloud functions logs read flickr-title-cleanse \
+  --project=flickrstats-492309 \
+  --region=europe-west9 \
+  --gen2 \
+  --limit=50
 ```
+
+For the extractor, look for the processed row count, successful `MERGE`, and
+staging-table truncation. For the cleanser, look for the `Title cleanse`
+summary with the run ID and counts; investigate warnings about skipped IDs and
+any errors. Startup probes and deployment rollout messages do not establish
+that a function was invoked. Timestamps in the log output are UTC.
 
 ### List enabled APIs
 
@@ -316,9 +352,9 @@ gcloud services list --enabled --project=flickrstats-492309
 The current live setup is:
 
 - **Project:** `flickrstats-492309`
-- **Cloud Function:** `flickr-daily-extract` in **`europe-west9`**
+- **Cloud Functions:** `flickr-daily-extract` and `flickr-title-cleanse` in **`europe-west9`**
 - **BigQuery dataset:** `flickrstats` in **`europe-west9`**
-- **Scheduler job:** `flickr-daily-stats-trigger` in **`europe-west1`**
+- **Scheduler jobs:** `flickr-daily-stats-trigger` and `flickr-title-cleanse-trigger` in **`europe-west1`**
 - **Execution service account:** `flickr-stats-loader@flickrstats-492309.iam.gserviceaccount.com`
 
 This file should be the main GCP CLI reference for the project.
